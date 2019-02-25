@@ -123,6 +123,9 @@ void Utility::bodyBytesToString(envoy::data::tap::v2alpha::TraceWrapper& trace,
     }
     break;
   }
+  case envoy::data::tap::v2alpha::TraceWrapper::kSocketStreamedTraceSegment: {
+    ASSERT(false); // fixfix
+  }
   case envoy::data::tap::v2alpha::TraceWrapper::TRACE_NOT_SET:
     NOT_REACHED_GCOVR_EXCL_LINE;
   }

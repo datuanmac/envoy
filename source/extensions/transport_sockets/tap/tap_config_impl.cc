@@ -10,7 +10,7 @@ namespace Tap {
 
 namespace TapCommon = Extensions::Common::Tap;
 
-PerSocketTapperImpl::PerSocketTapperImpl(SocketTapConfigImplSharedPtr config,
+PerSocketTapperImpl::PerSocketTapperImpl(SocketTapConfigSharedPtr config,
                                          const Network::Connection& connection)
     : config_(std::move(config)),
       sink_handle_(config_->createPerTapSinkHandleManager(connection.id())),
@@ -20,12 +20,12 @@ PerSocketTapperImpl::PerSocketTapperImpl(SocketTapConfigImplSharedPtr config,
 }
 
 void PerSocketTapperImpl::closeSocket(Network::ConnectionEvent) {
-  if (!config_->rootMatcher().matchStatus(statuses_).matches_) {
+  if (config_->streaming() || !config_->rootMatcher().matchStatus(statuses_).matches_) {
     return;
   }
 
+  trace_->mutable_socket_buffered_trace()->set_trace_id(connection_.id());
   auto* connection = trace_->mutable_socket_buffered_trace()->mutable_connection();
-  connection->set_id(connection_.id());
   Network::Utility::addressToProtobufAddress(*connection_.localAddress(),
                                              *connection->mutable_local_address());
   Network::Utility::addressToProtobufAddress(*connection_.remoteAddress(),
@@ -37,7 +37,7 @@ envoy::data::tap::v2alpha::SocketEvent& PerSocketTapperImpl::createEvent() {
   auto* event = trace_->mutable_socket_buffered_trace()->add_events();
   event->mutable_timestamp()->MergeFrom(Protobuf::util::TimeUtil::NanosecondsToTimestamp(
       std::chrono::duration_cast<std::chrono::nanoseconds>(
-          config_->time_source_.systemTime().time_since_epoch())
+          config_->timeSource().systemTime().time_since_epoch())
           .count()));
   return *event;
 }
@@ -47,17 +47,21 @@ void PerSocketTapperImpl::onRead(const Buffer::Instance& data, uint32_t bytes_re
     return;
   }
 
-  if (trace_->socket_buffered_trace().read_truncated()) {
-    return;
-  }
+  if (config_->streaming()) {
+    ASSERT(false); // fixfix
+  } else {
+    if (trace_->socket_buffered_trace().read_truncated()) {
+      return;
+    }
 
-  auto& event = createEvent();
-  ASSERT(rx_bytes_buffered_ <= config_->maxBufferedRxBytes());
-  trace_->mutable_socket_buffered_trace()->set_read_truncated(
-      Extensions::Common::Tap::Utility::addBufferToProtoBytes(
-          *event.mutable_read()->mutable_data(), config_->maxBufferedRxBytes() - rx_bytes_buffered_,
-          data, data.length() - bytes_read, bytes_read));
-  rx_bytes_buffered_ += event.read().data().as_bytes().size();
+    auto& event = createEvent();
+    ASSERT(rx_bytes_buffered_ <= config_->maxBufferedRxBytes());
+    trace_->mutable_socket_buffered_trace()->set_read_truncated(
+        Extensions::Common::Tap::Utility::addBufferToProtoBytes(
+            *event.mutable_read()->mutable_data(), config_->maxBufferedRxBytes() - rx_bytes_buffered_,
+            data, data.length() - bytes_read, bytes_read));
+    rx_bytes_buffered_ += event.read().data().as_bytes().size();
+  }
 }
 
 void PerSocketTapperImpl::onWrite(const Buffer::Instance& data, uint32_t bytes_written,
@@ -66,19 +70,23 @@ void PerSocketTapperImpl::onWrite(const Buffer::Instance& data, uint32_t bytes_w
     return;
   }
 
-  if (trace_->socket_buffered_trace().write_truncated()) {
-    return;
+  if (config_->streaming()) {
+    ASSERT(false); // fixfix
+  } else {
+    if (trace_->socket_buffered_trace().write_truncated()) {
+      return;
+    }
+
+    auto& event = createEvent();
+    ASSERT(tx_bytes_buffered_ <= config_->maxBufferedTxBytes());
+    trace_->mutable_socket_buffered_trace()->set_write_truncated(
+        Extensions::Common::Tap::Utility::addBufferToProtoBytes(
+            *event.mutable_write()->mutable_data(),
+            config_->maxBufferedTxBytes() - tx_bytes_buffered_, data, 0, bytes_written));
+    tx_bytes_buffered_ += event.write().data().as_bytes().size();
+
+    event.mutable_write()->set_end_stream(end_stream);
   }
-
-  auto& event = createEvent();
-  ASSERT(tx_bytes_buffered_ <= config_->maxBufferedTxBytes());
-  trace_->mutable_socket_buffered_trace()->set_write_truncated(
-      Extensions::Common::Tap::Utility::addBufferToProtoBytes(
-          *event.mutable_write()->mutable_data(),
-          config_->maxBufferedTxBytes() - tx_bytes_buffered_, data, 0, bytes_written));
-  tx_bytes_buffered_ += event.write().data().as_bytes().size();
-
-  event.mutable_write()->set_end_stream(end_stream);
 }
 
 } // namespace Tap

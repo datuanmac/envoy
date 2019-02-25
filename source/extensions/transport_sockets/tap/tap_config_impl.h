@@ -10,12 +10,9 @@ namespace Extensions {
 namespace TransportSockets {
 namespace Tap {
 
-class SocketTapConfigImpl;
-using SocketTapConfigImplSharedPtr = std::shared_ptr<SocketTapConfigImpl>;
-
 class PerSocketTapperImpl : public PerSocketTapper {
 public:
-  PerSocketTapperImpl(SocketTapConfigImplSharedPtr config, const Network::Connection& connection);
+  PerSocketTapperImpl(SocketTapConfigSharedPtr config, const Network::Connection& connection);
 
   // PerSocketTapper
   void closeSocket(Network::ConnectionEvent event) override;
@@ -25,7 +22,7 @@ public:
 private:
   envoy::data::tap::v2alpha::SocketEvent& createEvent();
 
-  SocketTapConfigImplSharedPtr config_;
+  SocketTapConfigSharedPtr config_;
   Extensions::Common::Tap::PerTapSinkHandleManagerPtr sink_handle_;
   const Network::Connection& connection_;
   Extensions::Common::Tap::Matcher::MatchStatusVector statuses_;
@@ -48,6 +45,7 @@ public:
   PerSocketTapperPtr createPerSocketTapper(const Network::Connection& connection) override {
     return std::make_unique<PerSocketTapperImpl>(shared_from_this(), connection);
   }
+  TimeSource& timeSource() override { return time_source_; }
 
 private:
   TimeSource& time_source_;

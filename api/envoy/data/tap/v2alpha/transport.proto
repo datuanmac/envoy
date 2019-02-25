@@ -18,10 +18,6 @@ import "google/protobuf/timestamp.proto";
 
 // Connection properties.
 message Connection {
-  // Global unique connection ID for Envoy session. Matches connection IDs used
-  // in Envoy logs.
-  uint64 id = 1;
-
   // Local address.
   envoy.api.v2.core.Address local_address = 2;
 
@@ -73,4 +69,23 @@ message SocketBufferedTrace {
   // Set to true if write events were truncated due to the :ref:`max_buffered_tx_bytes
   // <envoy_api_field_service.tap.v2alpha.OutputConfig.max_buffered_tx_bytes>` setting.
   bool write_truncated = 4;
+
+  // Global unique connection ID for Envoy session. Matches connection IDs used
+  // in Envoy logs. fixfix
+  uint64 trace_id = 5;
+}
+
+// fixfix
+message SocketStreamedTraceSegment {
+  // Global unique connection ID for Envoy session. Matches connection IDs used
+  // in Envoy logs. fixfix
+  uint64 trace_id = 1;
+
+  oneof message_piece {
+    // Connection properties.
+    Connection connection = 2;
+
+    // fixfix
+    SocketEvent event = 3;
+  }
 }

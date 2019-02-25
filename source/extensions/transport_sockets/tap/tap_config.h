@@ -52,6 +52,9 @@ public:
    * @param connection supplies the underlying network connection.
    */
   virtual PerSocketTapperPtr createPerSocketTapper(const Network::Connection& connection) PURE;
+
+  // fixfix
+  virtual TimeSource& timeSource() PURE;
 };
 
 using SocketTapConfigSharedPtr = std::shared_ptr<SocketTapConfig>;
